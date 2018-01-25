@@ -1,3 +1,38 @@
+/* Copyright Statement:
+ *
+ * This software/firmware and related documentation ("MediaTek Software") are
+ * protected under relevant copyright laws. The information contained herein
+ * is confidential and proprietary to MediaTek Inc. and/or its licensors.
+ * Without the prior written permission of MediaTek inc. and/or its licensors,
+ * any reproduction, modification, use or disclosure of MediaTek Software,
+ * and information contained herein, in whole or in part, shall be strictly prohibited.
+ *
+ * MediaTek Inc. (C) 2010. All rights reserved.
+ *
+ * BY OPENING THIS FILE, RECEIVER HEREBY UNEQUIVOCALLY ACKNOWLEDGES AND AGREES
+ * THAT THE SOFTWARE/FIRMWARE AND ITS DOCUMENTATIONS ("MEDIATEK SOFTWARE")
+ * RECEIVED FROM MEDIATEK AND/OR ITS REPRESENTATIVES ARE PROVIDED TO RECEIVER ON
+ * AN "AS-IS" BASIS ONLY. MEDIATEK EXPRESSLY DISCLAIMS ANY AND ALL WARRANTIES,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE OR NONINFRINGEMENT.
+ * NEITHER DOES MEDIATEK PROVIDE ANY WARRANTY WHATSOEVER WITH RESPECT TO THE
+ * SOFTWARE OF ANY THIRD PARTY WHICH MAY BE USED BY, INCORPORATED IN, OR
+ * SUPPLIED WITH THE MEDIATEK SOFTWARE, AND RECEIVER AGREES TO LOOK ONLY TO SUCH
+ * THIRD PARTY FOR ANY WARRANTY CLAIM RELATING THERETO. RECEIVER EXPRESSLY ACKNOWLEDGES
+ * THAT IT IS RECEIVER'S SOLE RESPONSIBILITY TO OBTAIN FROM ANY THIRD PARTY ALL PROPER LICENSES
+ * CONTAINED IN MEDIATEK SOFTWARE. MEDIATEK SHALL ALSO NOT BE RESPONSIBLE FOR ANY MEDIATEK
+ * SOFTWARE RELEASES MADE TO RECEIVER'S SPECIFICATION OR TO CONFORM TO A PARTICULAR
+ * STANDARD OR OPEN FORUM. RECEIVER'S SOLE AND EXCLUSIVE REMEDY AND MEDIATEK'S ENTIRE AND
+ * CUMULATIVE LIABILITY WITH RESPECT TO THE MEDIATEK SOFTWARE RELEASED HEREUNDER WILL BE,
+ * AT MEDIATEK'S OPTION, TO REVISE OR REPLACE THE MEDIATEK SOFTWARE AT ISSUE,
+ * OR REFUND ANY SOFTWARE LICENSE FEES OR SERVICE CHARGE PAID BY RECEIVER TO
+ * MEDIATEK FOR SUCH MEDIATEK SOFTWARE AT ISSUE.
+ *
+ * The following software/firmware and/or related documentation ("MediaTek Software")
+ * have been modified by MediaTek Inc. All revisions are subject to any receiver's
+ * applicable license agreements with MediaTek Inc.
+ */
+
 package com.cifer.zf_salestracker;
 
 import android.app.Activity;
@@ -12,10 +47,12 @@ import android.telephony.TelephonyManager;
 import android.util.Log;
 
 import com.android.internal.telephony.IccCardConstants;
+import com.cifer.zf_salestracker.FeatureOption;
 
-
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -69,7 +106,7 @@ public class SalesTrackerReceiver extends BroadcastReceiver {
 					//start Timer
 					Intent bootCompletedIntent = new Intent();
 					bootCompletedIntent.setAction("BOOTCOMPLETED");
-					bootCompletedIntent.setClass(mContext, SalesTrackerService.class);//开启服务
+					bootCompletedIntent.setClass(mContext, com.android.salestracker.SalesTrackerService.class);//开启服务
 					mContext.startService(bootCompletedIntent);
 				}
 			}else if(intentAction.equals(DM_REGISTER_SMS_RECEIVED_ACTION)){
@@ -102,14 +139,14 @@ public class SalesTrackerReceiver extends BroadcastReceiver {
 					writeSTNumberToFile(ststate);
 					Settings.System.putInt(context.getContentResolver(),
 							Settings.System.SALES_MODE_ON, 0);
-					mContext.stopService(new Intent(context, SalesTrackerService.class));	//停止服务
+					mContext.stopService(new Intent(context, com.android.salestracker.SalesTrackerService.class));	//停止服务
 
 				}else{
 					//3小时后再发
 					if(enableSalesTracker()){
 						Intent bootCompletedIntent = new Intent();
 						bootCompletedIntent.setAction("RESEND_SALES_MESSEGAES");
-						bootCompletedIntent.setClass(mContext, SalesTrackerService.class);
+						bootCompletedIntent.setClass(mContext, com.android.salestracker.SalesTrackerService.class);
 						mContext.startService(bootCompletedIntent);
 					}
 
@@ -130,7 +167,7 @@ public class SalesTrackerReceiver extends BroadcastReceiver {
 					if(enableSalesTracker()){
 						Intent bootCompletedIntent = new Intent();
 						bootCompletedIntent.setAction("SIM_STATE_CHANGED");
-						bootCompletedIntent.setClass(mContext, SalesTrackerService.class);
+						bootCompletedIntent.setClass(mContext, com.android.salestracker.SalesTrackerService.class);
 						mContext.startService(bootCompletedIntent);
 						Log.d("wywtest", "Sms register is enable !");
 
@@ -144,12 +181,13 @@ public class SalesTrackerReceiver extends BroadcastReceiver {
 					Log.d(WYWTEST, "the sim state is not loaded");
 				}
 
-			}else if(intentAction.equals(SalesTrackerService.TIMER_RECEIVED_ACTION)){
+			}else if(intentAction.equals(com.android.salestracker.SalesTrackerService.TIMER_RECEIVED_ACTION)){
 				Log.d(WYWTEST, "TIMER_RECEIVED_ACTION");
 				Log.d(WYWTEST, "sim state is loaded");
+				String stateshowdialog = getSNNumberFromFile();
 				Intent timerIntent = new Intent();
-				timerIntent.setAction(SalesTrackerService.TIMER_RECEIVED_ACTION);
-				timerIntent.setClass(mContext, SalesTrackerService.class);
+				timerIntent.setAction(com.android.salestracker.SalesTrackerService.TIMER_RECEIVED_ACTION);
+				timerIntent.setClass(mContext, com.android.salestracker.SalesTrackerService.class);
 				mContext.startService(timerIntent);
 			}else if(intentAction.equals("RESET_SALSE_TRACKER")){
 				File salesFile = new File(CHECK_FILE_PATH);
@@ -174,7 +212,7 @@ public class SalesTrackerReceiver extends BroadcastReceiver {
 				Intent dialerintent = new Intent();
 				Log.d("xiao111","ACTION_DIALER_BROADCAST ===============");
 				dialerintent.setAction("SHOW_FACTORYMODE_TOAST");
-				dialerintent.setClass(mContext, SalesTrackerService.class);
+				dialerintent.setClass(mContext, com.android.salestracker.SalesTrackerService.class);
 				mContext.startService(dialerintent);
 			}
 
@@ -223,6 +261,24 @@ public class SalesTrackerReceiver extends BroadcastReceiver {
 			Log.d(WYWTEST,"fail write in file  ==="+ e);
 			e.printStackTrace();
 		}
+	}
+	private String getSNNumberFromFile() {
+		byte buf[] = new byte[11];
+
+		try {
+			File file = new File(INTERNAL_FILE_PATH, ST_FILE_NAME);
+			FileInputStream fis = new FileInputStream(file);
+			BufferedInputStream bufferedInputStream = new BufferedInputStream(fis);
+			bufferedInputStream.read(buf);
+			bufferedInputStream.close();
+			fis.close();
+			return new String(buf);
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return "fail";
 	}
 
 }
